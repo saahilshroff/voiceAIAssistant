@@ -4,6 +4,7 @@ from openai import OpenAI
 import requests
 import logging
 import os
+import time
 import webbrowser
 from dotenv import load_dotenv
 
@@ -20,20 +21,34 @@ client = OpenAI(api_key=OPENAI_KEY)
 MAX_TOKENS = 500
 TEMPERATURE = 0.15
 
-
-# Initialize TTS engine
-tts_engine = pyttsx3.init()
-
 # Conversation memory - keeps the conversation flowing naturally
 conversation_history = []
 
 end_conversation_list = ["exit", "quit", "goodbye", "stop assistant", "shut down"]
+special_command_list = ["pause", "resume", "clear", "web", "search"]
+
+class _TTS:
+    engine = None
+    rate = None
+    def __init__(self):
+        self.engine = pyttsx3.init()
+
+    def start(self,text_):
+        self.engine.say(text_)
+        # Sleep for 30 seconds post response. else AI does not respond 
+        # (bug: https://stackoverflow.com/questions/56032027/pyttsx3-runandwait-method-gets-stuck/57181260#57181260)
+        if "Hello!" not in text_:
+            time.sleep(30)
+            
+        self.engine.runAndWait()
+        
 
 class ConversationalAssistant:
     def __init__(self):
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
         self.is_listening = True
+        self.tts_engine = pyttsx3.init()
         
         # Adjust for ambient noise on startup
         with self.microphone as source:
@@ -47,35 +62,34 @@ class ConversationalAssistant:
                 logging.info("Listening... (I'm ready to chat!)")
                 
                 # Use timeout to prevent hanging
-                audio = self.recognizer.listen(source, timeout=30, phrase_time_limit=30)
+                audio = self.recognizer.listen(source, timeout = 5, phrase_time_limit=30)
                 
                 try:
                     command = self.recognizer.recognize_google(audio)
                     logging.info(f"User: {command}")
                     return command.lower()
                 except sr.UnknownValueError:
+                    logging.warning("Could not understand audio")
                     return None
                 except sr.RequestError as e:
                     logging.error(f"❌ Speech recognition error: {e}")
                     return None
                     
         except sr.WaitTimeoutError:
+            logging.info("Listening timeout - no speech detected")
             return None
         except Exception as e:
             logging.error(f"❌ Microphone error: {e}")
             return None
 
     def text_to_speech(self, text):
-        """Convert text to speech"""
-        logging.info(f"Assistant: {text}")
-        
-        try:
-            tts_engine.say(text)
-            tts_engine.runAndWait()
-        except Exception as e:
-            logging.error(f"❌ TTS Error: {e}")
+        """Convert text to speech with enhanced error handling"""
+        tts = _TTS()
+        tts.start(text)
+        del tts  # Delete the instance after use
+        logging.info("✅ Audio reply played successfully")
 
-    def get_weather(self, city="New York"):
+    def get_weather(self, city):
         """Get weather information"""
         if not WEATHER_API_KEY:
             return "I'd love to help with weather, but I need a weather API key. For now, I can help with many other topics!"
@@ -111,26 +125,25 @@ class ConversationalAssistant:
             # Add user input to conversation history
             conversation_history.append({"role": "user", "content": user_input})
             
-            # Keep conversation history manageable (last 20 messages)
-            if len(conversation_history) > 20:
+            # Keep conversation history manageable (last 30 messages)
+            if len(conversation_history) > 30:
                 conversation_history.pop(0)
             
             # Enhanced system message for better conversation
             system_message = {
                 "role": "system", 
-                "content": f"""You are a friendly, helpful, and conversational voice assistant. 
-                
-Key traits:
-- Be natural and conversational, like talking to a friend
-- Keep responses concise but informative (1-3 sentences usually)
-- Show personality and enthusiasm when appropriate
-- Ask follow-up questions to keep conversation flowing
-- Be helpful with any topic: science, history, math, advice, entertainment, etc.
-- If you don't know something recent, acknowledge it but still try to help
-- Remember the conversation context
-- Be encouraging and positive
-
-Respond naturally as if you're having a real conversation!"""
+                "content": """You are a friendly, helpful, and conversational voice assistant. 
+                Key traits:
+                - Be natural and conversational, like talking to a friend
+                - Keep responses concise but informative (1-3 sentences usually)
+                - Show personality and enthusiasm when appropriate
+                - Ask follow-up questions to keep conversation flowing
+                - Be helpful with any topic: science, history, math, advice, entertainment, etc.
+                - If you don't know something recent, acknowledge it but still try to help
+                - Remember the conversation context
+                - Be encouraging and positive
+                - Always provide a meaningful response
+                - Respond naturally as if you're having a real conversation!"""
             }
             
             # Create messages array
@@ -148,10 +161,12 @@ Respond naturally as if you're having a real conversation!"""
             # Add AI response to conversation history
             conversation_history.append({"role": "assistant", "content": ai_response})
             
+            logging.info(f"✅ AI Response generated: {ai_response}")
+            
             return ai_response
             
         except Exception as e:
-            logging.error(f"Error getting AI response: {e}")
+            logging.error(f"❌ Error getting AI response: {e}")
             return "I'm having a little trouble right now, but I'm still here to chat! Try asking me something else."
 
     def handle_special_commands(self, command):
@@ -204,34 +219,37 @@ Respond naturally as if you're having a real conversation!"""
         return None  # Not a special command, handle as conversation
 
     def run(self):
+        greeting_message = "Hello! I'm your conversational assistant. I love to chat about anything and everything! What's on your mind today?"
         """Main assistant loop"""
         logging.info("🚀 Conversational Voice Assistant Starting...")
-        logging.info("\n💬 I'm here to chat about ANYTHING:")
-
-        logging.info("\n🎯 Special commands:")
+        logging.info("💬 I'm here to chat about ANYTHING:")
+        logging.info("🎯 Special commands:")
         logging.info("  • 'Clear conversation' - Start fresh")
         logging.info("  • 'Stop listening' - Pause")
         logging.info("  • 'Exit' - End conversation")
         logging.info("-" * 60)
+        logging.info(f"✅ AI Response generated: {greeting_message}");
         
-        self.text_to_speech("Hello! I'm your conversational assistant. I love to chat about anything and everything! What's on your mind today?")
+        # Initial greeting
+        self.text_to_speech(greeting_message)
         
         while True:
             if self.is_listening:
                 command = self.listen_to_user()
                 if command:
+                    logging.info(f"🎤 Processing command: {command}")
+                    
                     # First check for special commands
                     special_result = self.handle_special_commands(command)
                     
                     if special_result == "exit":
                         break
-                    elif special_result in ["pause", "resume", "clear", "web", "search"]:
+                    elif special_result in special_command_list:
                         continue  # Special command handled
                     else:
                         # Handle as general conversation
                         if "weather" in command:
                             # Extract city if mentioned
-                            city = "New York"
                             if " in " in command:
                                 try:
                                     city = command.split(" in ")[1].strip()
@@ -241,8 +259,9 @@ Respond naturally as if you're having a real conversation!"""
                             weather_info = self.get_weather(city)
                             self.text_to_speech(weather_info)
                         else:
-                            # General conversation - this is the main feature!
+                            logging.info("🤖 Getting AI response...")
                             response = self.get_conversational_response(command)
+                            logging.info("🔊 Playing audio reply...")
                             self.text_to_speech(response)
             else:
                 # When paused, only listen for resume command
