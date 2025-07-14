@@ -75,6 +75,11 @@ python voiceAIAssistant.py
 ```
 
 ## 🔧 Next steps
-### Add Interruption Support: Allow the user to interrupt the assistant mid-response.
-### UI Integration: Build a simple UI for toggling controls
-### Bug fixes: Improve TTS delay handling, and reduce false positives.
+#### Add Interruption Support
+Allow the user to interrupt the assistant mid-response.
+#### UI Integration
+Build a simple UI for toggling controls
+#### Bug fixes
+Improve TTS delay handling, and reduce false positives.
+#### Web search
+Improve web searching feature
