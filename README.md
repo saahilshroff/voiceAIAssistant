@@ -73,3 +73,8 @@ python voiceAIAssistant.py
 "Clear conversation" → Reset memory  
 "Goodbye" / "Exit" / "Quit" → End session
 ```
+
+## 🔧 Next steps
+### Add Interruption Support: Allow the user to interrupt the assistant mid-response.
+### UI Integration: Build a simple UI for toggling controls
+### Bug fixes: Improve TTS delay handling, and reduce false positives.
